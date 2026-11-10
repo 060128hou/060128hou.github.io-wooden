@@ -1,6 +1,13 @@
 {
-  "name": "wood-github-pages",
-  "version": "1.0.0",
+  "name": "wood-studio-v2",
+  "version": "2.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "start": "node v2/preview.mjs",
+    "test": "node v2/test/geometry.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

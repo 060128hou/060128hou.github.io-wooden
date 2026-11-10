@@ -1,24 +1,161 @@
-<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="千年木艺数字工坊 · 从需求到装配的木作设计体验"><title>千年木艺 · 方案工坊</title><link rel="stylesheet" href="./style.css"><script type="module" src="./app.js"></script></head>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171617">
+  <meta name="description" content="千年木艺木作设计工坊。调整尺寸、查看连接、跟随动画虚拟试装，并导出方案与构件资料。">
+  <title>千年木艺 · 木作设计工坊 V2</title>
+  <link rel="stylesheet" href="./v2/style.css">
+  <script type="module" src="./v2/app.js"></script>
+</head>
 <body>
-<header><a class="brand" href="#"><span class="mark">榫</span><span><strong>千年木艺</strong><small>非遗木作体验数字工坊</small></span></a><nav><a class="active" href="#workspace">方案工坊</a><a href="#assembly">装配课堂</a><a href="#requests">加工申请 <span id="requestCount">0</span></a></nav><span class="version">在线体验版 V1.0</span></header>
-<main>
-<section class="intro"><div><p class="eyebrow">WOODCRAFT / DESIGN STUDIO</p><h1>让一个想法，<span>成为一件木作。</span></h1><p>从尺寸到构件，从结构到装配。亲手设计你的第一件案上好物。</p></div><div class="case"><span class="dot"></span> 完整案例 01<strong>案上 · 双层置物架</strong><small>嵌槽连接 / 4 件木构件 / 5 步教程</small></div></section>
-<div class="workflow"><span class="active">01 <b>描述需求</b></span><i>—</i><span>02 <b>定制方案</b></span><i>—</i><span>03 <b>理解结构</b></span><i>—</i><span>04 <b>申请人工确认</b></span></div>
-<section class="workspace" id="workspace">
-<aside class="panel settings"><div class="panel-title"><h2>设计你的方案</h2><span>01 / INPUT</span></div>
-<label for="requirement">使用需求</label><textarea id="requirement" rows="3" maxlength="1000"></textarea><p class="hint">需求随方案保存；本版使用参数化模板，不自动生成任意家具。</p>
-<label>选择模板 <span class="muted">同一结构 · 两种预设</span></label><div class="templates"><button class="template active" data-template="standard"><span class="shelf-icon">▤</span><b>标准款</b><small>600 × 480 × 240</small></button><button class="template" data-template="compact"><span class="shelf-icon">▤</span><b>紧凑款</b><small>420 × 360 × 200</small></button></div>
-<div class="section-label">尺寸参数 <span>mm</span></div><form id="dimensions" novalidate><div id="dimensionFields"></div><label for="material">木材外观</label><select id="material"><option>白蜡木</option><option>黑胡桃木</option></select><p id="validation" class="error" role="alert"></p><button class="primary wide" type="submit">更新三维方案 <span>↗</span></button></form><p class="hint" id="saveState">草稿自动保存在此浏览器</p>
-</aside>
-<div class="panel scene-panel"><div class="panel-title"><h2>结构预览 <span class="badge">实时参数</span></h2><button id="resetView" class="text-button">↺ 重置视角</button></div><div class="scene" id="scene"><div class="scene-meta"><span id="sceneName">案上 · 标准置物架</span><small id="sceneDimensions"></small></div><svg id="viewer" viewBox="0 0 800 600" role="img" aria-label="可旋转的置物架三维结构，点击构件查看信息"></svg><div class="scene-note">拖动旋转 · 滚轮缩放 · 点击构件</div><div class="axis">Y ↑ <span>↙ X　 Z ↘</span></div></div><div class="view-controls"><button id="assembled" class="active">整体</button><button id="exploded">爆炸图</button><label for="explosion">拆解程度</label><input id="explosion" type="range" min="0" max="100" value="25"><output id="explosionValue">25%</output></div><div class="scene-footer"><span><i class="dot"></i> 本地三维几何预览</span><span>设计示意 · 非加工图纸</span></div></div>
-<aside class="panel details"><div class="panel-title"><h2>构件档案</h2><span>02 / DETAIL</span></div><p class="hint">点击模型或下方清单，查看构件。</p><div id="partDetail"></div><div class="summary"><div><span>木构件</span><strong>4 <small>件</small></strong></div><div><span>名义材积</span><strong id="volume"></strong></div></div><div class="notice"><strong>制作前，还需一次专业确认</strong><p>本版展示名义尺寸与槽口示意。配合公差、强度、抗倾覆及胶合工艺需工程验证。</p></div><button id="exportPlan" class="primary wide">↓ 导出完整方案</button><button id="printPlan" class="wide">打印 / 保存为 PDF</button><button id="openRequest" class="wide">申请加工确认 ↗</button><small class="hint">仅保存在当前浏览器；请导出后交给审核人。</small></aside>
-</section>
-<section class="panel bom"><div class="panel-title"><div><p class="eyebrow">BILL OF MATERIALS</p><h2>每一块木料，都有自己的位置</h2></div><button id="exportCsv">↓ 导出构件清单 CSV</button></div><div class="table-wrap"><table><thead><tr><th>编号 / 构件</th><th>材料</th><th>名义尺寸 · 长 × 宽 × 厚 (mm)</th><th>数量</th><th>连接工艺</th></tr></thead><tbody id="bomBody"></tbody></table></div><p class="hint">侧板尺寸为开槽前外包尺寸；层板长度含两端入槽部分。未包含开料余量、表面处理及辅料。</p></section>
-<section class="panel assembly" id="assembly"><div class="panel-title"><div><p class="eyebrow">LEARN BY MAKING</p><h2>一步一步，理解榫卯的关系</h2></div><span id="stepProgress" class="badge"></span></div><div class="assembly-layout"><div id="stepList"></div><article id="stepContent"></article></div></section>
-<section class="panel requests" id="requests"><div class="panel-title"><div><p class="eyebrow">HUMAN REVIEW</p><h2>此浏览器的加工申请</h2></div><button id="refreshRequests">刷新记录</button></div><p class="hint">申请保存在当前浏览器，不会上传到网站；清除浏览器数据会丢失，请及时导出。后续修改不会改变历史快照。此版本没有付款、工厂下单或自动审核。</p><div id="requestList" aria-live="polite"></div></section>
-<footer><span>千年木艺 / 从理解结构开始</span><span>传统木作 · 数字探索 · 人工确认</span></footer>
-</main>
-<dialog id="requestDialog"><form id="requestForm"><div class="panel-title"><h2>申请人工确认</h2><button type="button" id="closeDialog" aria-label="关闭">×</button></div><p>将当前方案保存在此浏览器，状态为待人工确认。需你另行导出并交给工程人员，才会进入实际审核。</p><div class="notice" id="requestSummary"></div><label for="requestNote">给审核人的备注</label><textarea id="requestNote" maxlength="1000" rows="3" placeholder="例如：请先确认连接强度和木材选型"></textarea><label class="consent"><input type="checkbox" id="consent" required>我理解此方案需工程验证，此操作不会付款或向工厂下单。</label><p id="requestError" class="error" role="alert"></p><button class="primary wide" id="submitRequest" type="submit">保存为待人工确认</button></form></dialog>
-<div id="toast" role="status"></div><section id="printReport"></section>
-</body></html>
+  <a class="skip-link" href="#workspace">跳到设计工作台</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="#workspace" class="brand" aria-label="千年木艺工作台">
+        <span class="brand-stamp" aria-hidden="true">榫</span>
+        <span class="brand-text"><strong>千年木艺</strong><small>木作设计工坊</small></span>
+      </a>
+      <nav aria-label="页面导航">
+        <a href="#workspace">设计工作台</a>
+        <a href="#parts">构件与标签</a>
+        <a href="#validation">样件验证</a>
+        <a href="#requests">加工申请</a>
+      </nav>
+      <span class="edition">第二版</span>
+    </div>
+  </header>
+  <main>
+    <section id="workspace" aria-labelledby="caseTitle">
+      <div class="overview">
+        <div class="overview-text">
+          <div class="case-facts">
+            <span id="caseType"></span>
+            <span><b id="partCount"></b> 件构件</span>
+            <span><b id="stepCount"></b> 步装配</span>
+          </div>
+          <h1 id="caseTitle">木作设计工坊</h1>
+          <p id="caseDescription"></p>
+        </div>
+        <div class="case-switch">
+          <label for="caseSelect">切换木作案例</label>
+          <select id="caseSelect"></select>
+        </div>
+      </div>
+      <div class="workbench">
+        <section class="panel parameters" aria-labelledby="paramHeading">
+          <div class="section-heading"><h2 id="paramHeading">方案参数</h2><span class="unit">mm</span></div>
+          <form id="paramForm" novalidate>
+            <div class="field">
+              <label for="preset">尺寸预设</label>
+              <select id="preset"></select>
+            </div>
+            <div id="paramFields" class="param-fields"></div>
+            <div class="field">
+              <label for="material">木材外观</label>
+              <select id="material"></select>
+            </div>
+            <div class="field">
+              <label for="requirement">使用需求 <small>随方案保存</small></label>
+              <textarea id="requirement" maxlength="1000" rows="2" placeholder="例如：放在书桌上收纳文具"></textarea>
+            </div>
+            <p id="paramError" class="form-error" role="alert"></p>
+            <button class="primary full" id="applyParams" type="submit">应用参数</button>
+            <p class="quiet status" id="draftStatus" aria-live="polite"></p>
+          </form>
+        </section>
+        <section class="panel model-panel" aria-labelledby="viewTitle">
+          <div class="scene-toolbar">
+            <h2 id="viewTitle">结构视图</h2>
+            <div class="view-buttons" aria-label="模型视图">
+              <button type="button" id="modeAssembly" class="active">整体</button>
+              <button type="button" id="modeExplode">爆炸图</button>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="scene-caption"><span class="dimension-mark" aria-hidden="true"></span><span id="viewDimensions"></span></div>
+            <svg id="viewer" viewBox="0 0 800 600" role="group" tabindex="0" aria-label="木作三维视图，可拖动旋转或点击构件查看档案"></svg>
+          </div>
+          <div id="compactPlayer"></div>
+          <div class="scene-help"><span>拖动旋转 · 缩放查看 · 点选构件</span><button type="button" class="text-button" id="resetView">复位视角</button></div>
+          <div class="explode-controls">
+            <label for="explosion">拆解程度</label>
+            <input type="range" id="explosion" min="0" max="100" value="0">
+            <output for="explosion" id="explosionValue">0%</output>
+          </div>
+          <div class="part-readout">
+            <h3>选中构件</h3><div id="partDetail" aria-live="polite"></div>
+          </div>
+        </section>
+        <section class="panel assembly-panel" aria-labelledby="assemblyHeading">
+          <div class="section-heading"><h2 id="assemblyHeading">分步试装</h2><span id="stepPosition"></span></div>
+          <div id="stepList" aria-label="选择装配步骤"></div>
+          <article class="step-description">
+            <h3 id="stepTitle"></h3>
+            <p id="stepInstruction"></p>
+            <div id="stepParts" class="part-chips" aria-label="本步构件"></div>
+            <div class="checkpoint"><strong>检查点</strong><p id="stepCheck"></p></div>
+          </article>
+          <div class="playback" id="player">
+            <p id="compactStep"></p>
+            <label class="quiet" for="stepProgress">本步动画进度</label>
+            <progress id="stepProgress" max="1" value="0"></progress>
+            <div class="transport">
+              <button id="play" type="button" class="primary">播放</button>
+              <button id="pause" type="button">暂停</button>
+              <button id="replay" type="button">重播</button>
+            </div>
+            <div class="step-nav">
+              <button id="prevStep" type="button">← 上一步</button>
+              <button id="nextStep" type="button">下一步 →</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="parts" class="panel report-section" aria-labelledby="bomHeading">
+      <div class="report-heading">
+        <div><h2 id="bomHeading">构件清单与料包标签</h2><p>按编号核对模型、教程与实物。下表为名义尺寸，单位毫米。</p></div>
+        <div class="actions"><button id="printLabels" type="button">打印构件标签</button><button id="exportCsv" type="button">导出清单 CSV</button></div>
+      </div>
+      <div class="table-scroll"><table>
+        <thead><tr><th scope="col">编号</th><th scope="col">构件</th><th scope="col">数量</th><th scope="col">长 × 宽 × 厚 (mm)</th><th scope="col">连接与加工说明</th></tr></thead>
+        <tbody id="bomBody"></tbody>
+      </table></div>
+      <div class="report-export"><span id="stockVolume"></span><div class="actions"><button id="printPlan" type="button">打印方案 / PDF</button><button id="exportJson" type="button" class="accent-button">导出方案 JSON</button></div></div>
+    </section>
+
+    <section class="panel report-section" id="validation" aria-labelledby="validationHeading">
+      <div class="report-heading">
+        <div><h2 id="validationHeading">参数校验与样件验证</h2><p>开料前，请加工方结合实际木材、刀具和样件复核。</p></div>
+        <button id="printSample" type="button">打印样件检查单</button>
+      </div>
+      <div class="review-grid">
+        <div class="review-block"><h3>几何关系 <span id="validationStatus" role="status"></span></h3><ul id="rulesList"></ul></div>
+        <div class="review-block"><h3>实物与工艺复核</h3><ul id="reviewList"></ul></div>
+      </div>
+    </section>
+
+    <section class="panel report-section" id="requests" aria-labelledby="requestHeading">
+      <div class="report-heading">
+        <div><h2 id="requestHeading">加工申请</h2><p>申请保存在当前浏览器。导出申请交给审核人后，由人工确认工艺与制作条件。</p></div>
+      </div>
+      <div class="requests-grid">
+        <form id="requestForm">
+          <label for="requestNote">审核备注</label>
+          <textarea id="requestNote" rows="2" maxlength="1000" placeholder="记录材料选择、连接配合或需复核的尺寸"></textarea>
+          <label class="checkbox-label"><input type="checkbox" id="requestConsent" required>我理解此方案需要工程复核，申请只保存在当前设备。</label>
+          <p class="form-error" role="alert" id="requestError"></p>
+          <button type="submit" id="saveRequest" class="accent-button">保存为待人工确认</button>
+        </form>
+        <div class="request-history"><h3>本浏览器的申请记录</h3><div id="requestList"></div></div>
+      </div>
+    </section>
+    <footer><span>千年木艺 · 木作设计工坊</span><a href="#workspace">回到工作台 ↑</a></footer>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <section id="printReport"></section>
+</body>
+</html>
