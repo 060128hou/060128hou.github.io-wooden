@@ -1,10 +1,13 @@
+import {dougongCase} from './dougong.js';
+
 // Geometry is expressed in mm: X across, Y up, Z towards the front.
 // All coordinates, slots, joint markers and motion endpoints originate here.
 export const FIELD_NAMES = {
-  w: '总宽度', h: '总高度', d: '总深度', t: '板材厚度', m: '上下留边'
+  w: '总宽度', h: '总高度', d: '总深度', t: '板材厚度', m: '上下留边',s:'整体显示比例'
 };
 
 export const CASES = {
+  dougong:dougongCase,
   shelf: {
     id: 'shelf', name: '案上双层置物架', subtitle: '四件木构件的嵌槽装配',
     connection: '双侧嵌槽',
@@ -77,7 +80,7 @@ export function validate(p) {
   const errors = [];
   for (const [key, [min, max]] of Object.entries(CASES[p.caseId].limits)) {
     if (!Number.isInteger(p[key]) || p[key] < min || p[key] > max) {
-      errors.push(`${FIELD_NAMES[key]}应为 ${min}–${max} mm 的整数`);
+      errors.push(`${FIELD_NAMES[key]}应为 ${min}–${max} ${CASES[p.caseId].fieldUnit||'mm'} 的整数`);
     }
   }
   if (!errors.length) {
@@ -211,7 +214,7 @@ export function build(p) {
   const geometry = def.geometry(p);
   const parts = geometry.parts.map(part => ({...part, material: p.material, quantity: 1, jointIds: geometry.joints.filter(j => j.partIds.includes(part.id)).map(j => j.id)}));
   const volume = parts.reduce((v, part) => v + part.size.reduce((a, b) => a * b, 1), 0) / 1e9;
-  return {...geometry, caseId: p.caseId, name: def.name, parameters: {...p}, connection: def.connection, parts, checks: def.checkRelations(p), volume};
+  return {dimensions:{w:p.w,h:p.h,d:p.d},...geometry, caseId: p.caseId, name: def.name, parameters: {...p}, connection: def.connection, camera:def.camera, parts, checks: def.checkRelations(p), volume};
 }
 
 // Keyframes in assembly coordinates. Intermediate steps keep seated parts fixed.
@@ -238,6 +241,7 @@ export function pose(model, stepIndex, progress) {
   const unit = Math.max(0, Math.min(1, Number(progress) || 0));
   const time = unit * unit * (3 - 2 * unit);
   const definition = CASES[model.caseId];
+  if(definition.pose)return definition.pose(model,index,unit);
   const frame = definition.keyframe;
   const start = frame(model.parameters, index), end = frame(model.parameters, index + 1);
   const mix = (a, b) => a + (b - a) * time;
@@ -254,13 +258,13 @@ export function pose(model, stepIndex, progress) {
 export function snapshot(p) {
   const model = build(p);
   return {schemaVersion: 2, case: model.name, createdAt: new Date().toISOString(),
-    status: '名义设计 / 样件及工艺待验证', ...model, engineering: ENGINEERING_NOTE};
+    status: model.engineeringNote?'图示比例复原 / 待实物核对':'名义设计 / 样件及工艺待验证', ...model, engineering: model.engineeringNote||ENGINEERING_NOTE};
 }
 
 export function csv(p) {
   const {parts} = build(p);
   const rows = [['案例', '编号', '构件', '材料', '数量', '长(mm)', '宽(mm)', '厚(mm)', '接口编号', '方向', '设计备注'],
     ...parts.map(part => [CASES[p.caseId].name, part.id, part.name, part.material, part.quantity, ...part.size, part.jointIds.join(' / '), part.orientation, part.note]),
-    ['待工程验证', '', '', '', '', '', '', '', '', '', ENGINEERING_NOTE]];
+    ['待工程验证', '', '', '', '', '', '', '', '', '', CASES[p.caseId].engineeringNote||ENGINEERING_NOTE]];
   return '\uFEFF' + rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
 }

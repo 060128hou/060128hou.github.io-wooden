@@ -1,12 +1,13 @@
-import {CASES, FIELD_NAMES, MATERIALS, defaults, validate, build, snapshot, csv} from './model.js';
-import {Viewer} from './viewer.js';
+import {CASES, FIELD_NAMES, MATERIALS, defaults, validate, build, snapshot, csv} from './model.js?v=dougong-1';
+import {Viewer} from './viewer.js?v=dougong-1';
 import {readDraft, saveDraft, lastCase, listApplications, createApplication} from './storage.js';
-import {escapeHtml as e, downloadFile, printDocument, partDiagram, featureNotes, sampleTasks} from './reports.js';
+import {escapeHtml as e, downloadFile, printDocument, partDiagram, featureNotes, sampleTasks} from './reports.js?v=dougong-1';
 
 const el = id => document.getElementById(id);
 let params, model, selectedId;
 let stepIndex=0, completed=new Set(), mode='inspect', explosion=0;
 let toastTimer;
+let continuous=false,advanceTimer;
 const viewer=new Viewer(el('viewer'),{onSelect:selectPart,onPlayback:updatePlayback});
 const compactScreen=window.matchMedia('(max-width: 840px)');
 const desktopPlayer=el('player').parentElement;
@@ -46,7 +47,8 @@ function persist() {
 }
 
 function switchCase(id) {
-  if(!Object.hasOwn(CASES,id)) id='shelf';
+  if(!Object.hasOwn(CASES,id)) id='dougong';
+  stopContinuous();
   const draft=readDraft(id);
   const usable=draft?.parameters?.caseId===id && validate(draft.parameters).length===0;
   viewer.pause();
@@ -55,20 +57,26 @@ function switchCase(id) {
   stepIndex=usable&&Number.isInteger(draft.step)?Math.max(0,Math.min(model.steps.length-1,draft.step)):0;
   completed=new Set(usable&&Array.isArray(draft.completed)?draft.completed.filter(n=>Number.isInteger(n)&&model.steps[n]):[]);
   selectedId=model.parts[0].id;
+  viewer.setLabels(model.parts.length<=8);
+  el('toggleLabels').setAttribute('aria-pressed',viewer.showLabels);
   mode='inspect';explosion=0;
   renderForm();
   renderCase();
   viewer.resetView();
   persist();
+  const url=new URL(location.href);url.searchParams.set('case',id);
+  history.replaceState(null,'',url);
 }
 
 function renderForm() {
   const spec=CASES[params.caseId];
+  const unit=spec.fieldUnit||'mm';
+  el('paramUnit').textContent=unit;
   el('caseSelect').value=params.caseId;
   el('requirement').value=params.requirement;
   el('material').value=params.material;
   el('preset').innerHTML='<option value="">自定义尺寸</option>'+spec.presets.map(p=>`<option value="${e(p.id)}">${e(p.name)}</option>`).join('');
-  el('paramFields').innerHTML=Object.entries(spec.limits).map(([key,[min,max]])=>`<label class="param-field"><span>${e(FIELD_NAMES[key])}</span><input aria-label="${e(FIELD_NAMES[key])}（毫米）" name="${key}" type="number" step="1" min="${min}" max="${max}" value="${params[key]}" required><small>${min}–${max} mm</small></label>`).join('');
+  el('paramFields').innerHTML=Object.entries(spec.limits).map(([key,[min,max]])=>`<label class="param-field"><span>${e(FIELD_NAMES[key])}</span><input aria-label="${e(FIELD_NAMES[key])}（${unit}）" name="${key}" type="number" step="1" min="${min}" max="${max}" value="${params[key]}" required><small>${min}–${max} ${unit}</small></label>`).join('');
   reflectPreset();
   el('paramError').textContent='';
 }
@@ -88,6 +96,7 @@ function commitForm() {
   const geometryChanged=Object.keys(CASES[next.caseId].limits).some(key=>params[key]!==next[key]);
   const changed=geometryChanged||next.material!==params.material||next.requirement!==params.requirement;
   if(changed){
+    stopContinuous();
     viewer.pause();
     if(geometryChanged)completed.clear();
     params=next;model=build(params);
@@ -100,11 +109,17 @@ function renderCase() {
   const spec=CASES[params.caseId];
   el('caseTitle').textContent=spec.name;
   el('caseDescription').textContent=spec.subtitle;
+  document.querySelector('.edition').textContent=spec.reference?'斗拱案例':'第二版';
   el('caseType').textContent=spec.connection;
   el('partCount').textContent=model.parts.length;
   el('stepCount').textContent=model.steps.length;
-  el('viewDimensions').textContent=`宽 ${params.w} × 高 ${params.h} × 深 ${params.d} mm`;
-  el('stockVolume').textContent=`开槽前名义材积 ${model.volume.toFixed(4)} m³（不含开料余量）`;
+  const {w,h,d}=model.dimensions;
+  el('viewDimensions').textContent=`${model.dimensionLabel||'外廓'}　${w} × ${h} × ${d} mm`;
+  el('caseNote').hidden=!spec.reference;
+  el('caseCaveat').textContent=spec.engineeringNote||'';
+  el('bomNote').textContent=spec.reference?'下表列出 27 个展示分件的外包尺寸，供核对比例与编号。实物分件及加工尺寸待测绘。':'按编号核对模型、教程与实物。下表为名义尺寸，单位毫米。';
+  el('stockVolume').textContent=spec.reference?'图示比例模型 · 分件与加工尺寸待复核':`开槽前名义材积 ${model.volume.toFixed(4)} m³（不含开料余量）`;
+  document.body.dataset.case=params.caseId;
   viewer.setModel(model);
   if(mode==='tutorial')viewer.setStep(stepIndex);
   else viewer.setExplosion(explosion);
@@ -123,6 +138,7 @@ function renderViewState() {
 }
 
 function inspect(fraction) {
+  stopContinuous();
   mode='inspect';explosion=fraction;
   viewer.setExplosion(fraction);
   el('pause').disabled=true;
@@ -139,26 +155,32 @@ function selectPart(id) {
   const detail=el('partDetail');
   const drawingOpen=Boolean(detail.querySelector('details')?.open);
   detail.innerHTML=`<strong>${e(part.id)}　${e(part.name)}</strong><p>${e(part.size.join(' × '))} mm　·　${e(part.material)}</p><p>${e(part.orientation)}　${e(part.note)}</p><small>连接位置　${e(connections)}</small>
-    <details class="part-sheet" ${drawingOpen?'open':''}><summary>查看构件尺寸图</summary>${partDiagram(part)}${featureNotes(part)}</details>`;
+    <details class="part-sheet" ${drawingOpen?'open':''}><summary>查看构件${model.engineeringNote?'比例':'尺寸'}图</summary>${partDiagram(part)}${featureNotes(part)}</details>`;
   el('bomBody').innerHTML=model.parts.map(p=>`<tr class="${p.id===id?'selected':''}"><td><button type="button" class="part-link" data-part="${e(p.id)}" aria-pressed="${p.id===id}">${e(p.id)}</button></td><td>${e(p.name)}</td><td>${p.quantity}</td><td>${e(p.size.join(' × '))}</td><td>${e(p.note)}</td></tr>`).join('');
 }
 
 function renderChecks() {
   const passed=model.checks.filter(c=>c.ok).length;
-  el('validationStatus').textContent=`名义几何 ${passed}/${model.checks.length} 项通过`;
+  el('validationStatus').textContent=`${model.engineeringNote?'展示数据':'名义几何'} ${passed}/${model.checks.length} 项通过`;
   el('rulesList').innerHTML=model.checks.map(c=>`<li><strong>${e(c.label)}</strong><span>${e(c.detail)}</span></li>`).join('');
   el('reviewList').innerHTML=sampleTasks(model,params).map(text=>`<li>${e(text)}</li>`).join('');
 }
 
 function renderStep() {
   const step=model.steps[stepIndex];
-  el('stepList').innerHTML=model.steps.map((s,i)=>`<button type="button" data-step="${i}" aria-current="${i===stepIndex?'step':'false'}" class="step-chip ${i===stepIndex?'active':''} ${completed.has(i)?'done':''}"><span>${completed.has(i)?'✓':i+1}</span> ${e(s.title)}</button>`).join('');
+  el('stepList').innerHTML=model.steps.map((s,i)=>`${s.groupTitle&&s.group!==model.steps[i-1]?.group?`<p class="step-group">${e(s.groupTitle)}</p>`:''}<button type="button" data-step="${i}" aria-current="${i===stepIndex?'step':'false'}" class="step-chip ${i===stepIndex?'active':''} ${completed.has(i)?'done':''}"><span>${completed.has(i)?'✓':i+1}</span> ${e(s.title)}</button>`).join('');
+  const list=el('stepList'),active=list.querySelector('[aria-current="step"]');
+  if(active&&list.scrollHeight>list.clientHeight){
+    const listRect=list.getBoundingClientRect(),rect=active.getBoundingClientRect();
+    if(rect.bottom>listRect.bottom)list.scrollTop+=rect.bottom-listRect.bottom+8;
+    if(rect.top<listRect.top)list.scrollTop-=listRect.top-rect.top+8;
+  }
   el('stepPosition').textContent=`第 ${stepIndex+1} / ${model.steps.length} 步`;
   el('compactStep').textContent=`第 ${stepIndex+1} / ${model.steps.length} 步 · ${step.title}`;
   el('stepTitle').textContent=step.title;
   el('stepInstruction').textContent=step.text;
   el('stepCheck').textContent=step.check;
-  el('stepParts').innerHTML=step.ids.map(id=>`<button class="chip" type="button" data-part="${id}">${id} ${e(model.parts.find(p=>p.id===id)?.name)}</button>`).join('');
+  el('stepParts').innerHTML=(step.ids.length>8?[]:step.ids).map(id=>`<button class="chip" type="button" data-part="${id}">${id} ${e(model.parts.find(p=>p.id===id)?.name)}</button>`).join('');
   el('prevStep').disabled=stepIndex===0;
   el('nextStep').disabled=stepIndex===model.steps.length-1;
 }
@@ -180,6 +202,21 @@ function updatePlayback(state) {
   if(mode==='tutorial'&&state.progress>=1&&state.step===stepIndex&&!completed.has(stepIndex)){
     completed.add(stepIndex);renderStep();persist();
   }
+  if(continuous&&state.mode==='assembly'&&state.progress>=1&&!advanceTimer){
+    advanceTimer=setTimeout(()=>{
+      advanceTimer=null;
+      if(!continuous)return;
+      if(stepIndex<model.steps.length-1)activateStep(stepIndex+1);
+      else stopContinuous();
+    },650);
+  }
+}
+
+function stopContinuous() {
+  continuous=false;
+  clearTimeout(advanceTimer);advanceTimer=null;
+  el('playAll').textContent='连播装配';
+  el('playAll').setAttribute('aria-pressed','false');
 }
 
 function usePreset(id) {
@@ -190,7 +227,7 @@ function usePreset(id) {
 }
 
 function makePlan() {
-  return {...snapshot(params),sampleChecklist:sampleTasks(model,params),verificationStatus:{geometry:'名义几何已检查',physicalSample:'待试制',craftReview:'待人工复核'}};
+  return {...snapshot(params),sampleChecklist:sampleTasks(model,params),verificationStatus:{geometry:model.engineeringNote?'图示比例复原，暗榫与实体路径待核对':'名义几何已检查',physicalSample:'待试制',craftReview:'待人工复核'}};
 }
 
 function renderApplications() {
@@ -198,7 +235,8 @@ function renderApplications() {
     const records=listApplications();
     el('requestList').innerHTML=records.length?records.map(record=>{
       const p=record.plan.parameters;
-      return `<article class="request-record"><div><strong>${e(CASES[p.caseId||'shelf']?.name||'木作方案')} · ${e(record.status)}</strong><p>${e(p.w)} × ${e(p.h)} × ${e(p.d)} mm　${e(new Date(record.createdAt).toLocaleString('zh-CN'))}</p>${record.note?`<p>${e(record.note)}</p>`:''}</div><button type="button" data-record="${e(record.id)}">导出申请</button></article>`;
+      const size=record.plan.dimensions||p;
+      return `<article class="request-record"><div><strong>${e(CASES[p.caseId||'shelf']?.name||'木作方案')} · ${e(record.status)}</strong><p>${e(size.w)} × ${e(size.h)} × ${e(size.d)} mm　${e(new Date(record.createdAt).toLocaleString('zh-CN'))}</p>${record.note?`<p>${e(record.note)}</p>`:''}</div><button type="button" data-record="${e(record.id)}">导出申请</button></article>`;
     }).join(''):'<p>此浏览器暂无申请记录。</p>';
   } catch {el('requestList').textContent='申请记录读取失败。请保留现有浏览器数据。';}
 }
@@ -213,12 +251,28 @@ el('modeAssembly').onclick=()=>inspect(0);
 el('modeExplode').onclick=()=>inspect(.85);
 el('explosion').oninput=event=>inspect(Number(event.target.value)/100);
 el('resetView').onclick=()=>viewer.resetView();
-el('stepList').onclick=event=>{const button=event.target.closest('[data-step]');if(button)activateStep(+button.dataset.step);};
-el('prevStep').onclick=()=>activateStep(stepIndex-1);
-el('nextStep').onclick=()=>activateStep(stepIndex+1);
+el('toggleLabels').onclick=()=>{viewer.setLabels(!viewer.showLabels);el('toggleLabels').setAttribute('aria-pressed',viewer.showLabels);};
+el('stepList').onclick=event=>{const button=event.target.closest('[data-step]');if(button){stopContinuous();activateStep(+button.dataset.step);}};
+el('prevStep').onclick=()=>{stopContinuous();activateStep(stepIndex-1);};
+el('nextStep').onclick=()=>{stopContinuous();activateStep(stepIndex+1);};
 el('play').onclick=()=>{if(mode!=='tutorial')activateStep(stepIndex,false);showCurrentMotion();viewer.play();};
-el('pause').onclick=()=>viewer.pause();
-el('replay').onclick=()=>{if(mode!=='tutorial')activateStep(stepIndex,false);showCurrentMotion();viewer.replay();};
+el('pause').onclick=()=>{stopContinuous();viewer.pause();};
+el('replay').onclick=()=>{stopContinuous();if(mode!=='tutorial')activateStep(stepIndex,false);showCurrentMotion();viewer.replay();};
+el('playAll').onclick=()=>{
+  if(continuous){stopContinuous();viewer.pause();return;}
+  continuous=true;el('playAll').textContent='停止连播';el('playAll').setAttribute('aria-pressed','true');
+  if(mode!=='tutorial'||stepIndex===model.steps.length-1)activateStep(0);
+  else {showCurrentMotion();viewer.play();}
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopContinuous();});
+el('openReference').onclick=()=>{
+  const ref=CASES[params.caseId].reference;if(!ref)return;
+  stopContinuous();viewer.pause();
+  el('referenceImage').src=ref.url;el('referenceTitle').textContent=ref.title;
+  el('referenceCredit').textContent=ref.credit;el('referenceDialog').showModal();
+};
+el('closeReference').onclick=()=>el('referenceDialog').close();
+el('referenceDialog').onclick=event=>{if(event.target===el('referenceDialog'))el('referenceDialog').close();};
 for(const id of ['stepParts','bomBody'])el(id).onclick=event=>{const button=event.target.closest('[data-part]');if(button)selectPart(button.dataset.part);};
 el('exportJson').onclick=()=>{if(commitForm())downloadFile(`${CASES[params.caseId].name}-方案.json`,JSON.stringify(makePlan(),null,2));};
 el('exportCsv').onclick=()=>{if(commitForm())downloadFile(`${CASES[params.caseId].name}-构件清单.csv`,csv(params),'text/csv;charset=utf-8');};
@@ -242,4 +296,5 @@ el('caseSelect').innerHTML=Object.values(CASES).map(c=>`<option value="${e(c.id)
 el('material').innerHTML=MATERIALS.map(name=>`<option>${e(name)}</option>`).join('');
 placePlayer();
 compactScreen.addEventListener('change',placePlayer);
-switchCase(lastCase()||'shelf');renderApplications();
+const requestedCase=new URLSearchParams(location.search).get('case');
+switchCase(requestedCase||lastCase()||'dougong');renderApplications();

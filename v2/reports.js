@@ -1,4 +1,4 @@
-import {CASES} from './model.js';
+import {CASES} from './model.js?v=dougong-1';
 
 export const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 
@@ -14,6 +14,14 @@ export function downloadFile(name, content, type='application/json;charset=utf-8
 }
 
 export function sampleTasks(model,params) {
+  if(model.engineeringNote)return [
+    model.engineeringNote,
+    '对照实体料包核对 27 个展示分件及其名称，记录乳栿、耍头与平棊枋的实际分件方式。',
+    '逐件量取长度、截面、曲线和销孔，记录本模型比例与实测尺寸的差异。',
+    '核对昂尾的实际位置、避让关系与插入路径，确认每一步需临时支撑的部位。',
+    '复核斗口、交叉槽、暗榫及枋材先后顺序，按实际料包修订教学动作。',
+    CASES[params.caseId].review
+  ];
   return [
     '按构件编号测量实际板长、板宽、板厚，标明内外面与上下方向。',
     `用同批${params.material}余料试切配合，记录刀具、实际槽宽、槽深、含水率和插合感受。`,
@@ -49,10 +57,12 @@ export function partDiagram(part) {
     return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" stroke="#714c25" stroke-width="1"/><path d="M${labelX} ${y+h/2} L${tagX} ${tagY}" fill="none" stroke="#7c5835" stroke-width=".8"/><rect x="${tagX-9.5}" y="${tagY-6}" width="19" height="12" rx="2" fill="#523d28"/><text x="${tagX}" y="${tagY+3.5}" font-size="9" text-anchor="middle" fill="#fff5e7">${e(feature.jointId)}</text>`;
   }).join('');
   const description=drawing.features.map(f=>`${f.jointId} ${f.description}`).join(' ');
+  const body=drawing.outlines?drawing.outlines.map(poly=>`<path d="M${poly.map(([x,y])=>`${left+x*scale},${bottom-y*scale}`).join('L')}Z" fill="#e2cca9" stroke="#6f573b"/>`).join(''):
+    `<rect x="${left}" y="${top}" width="${width}" height="${height}" fill="#e2cca9" stroke="#6f573b"/>`;
   return `<svg class="part-drawing" viewBox="0 0 320 192" role="img" aria-label="${e(part.id+' '+drawing.face+'，'+description)}" xmlns="http://www.w3.org/2000/svg">
     <rect width="320" height="192" rx="5" fill="#faf5eb"/>
     <text x="10" y="16" fill="#594d3e" font-size="10">${e(part.id)} · ${e(drawing.face)}</text>
-    <rect x="${left}" y="${top}" width="${width}" height="${height}" fill="#e2cca9" stroke="#6f573b"/>
+    ${body}
     ${features}
     <path d="M${left} 165 v8 m0 -4 H${right} m0 -4 v8 M294 ${top} h8 m-4 0 V${bottom} m-4 0 h8" fill="none" stroke="#75654e" stroke-width=".8"/>
     <text x="${(left+right)/2}" y="184" font-size="11" fill="#443421" text-anchor="middle">${drawing.width} mm</text>
@@ -61,12 +71,13 @@ export function partDiagram(part) {
 }
 
 export function featureNotes(part) {
-  return part.drawing.features.map(f=>`<p><b>${escapeHtml(f.jointId)}</b>　${escapeHtml(f.description)}</p>`).join('');
+  return part.drawing.features.map(f=>`<p><b>${escapeHtml(f.jointId)}</b>　${escapeHtml(f.description)}</p>`).join('')+
+    (part.drawing.note?`<p>${escapeHtml(part.drawing.note)}</p>`:'');
 }
 
 export function printDocument(kind,name,model,params) {
   const e=escapeHtml;
-  const size=`${params.w} × ${params.h} × ${params.d} mm`;
+  const size=`${model.dimensions.w} × ${model.dimensions.h} × ${model.dimensions.d} mm`;
   const heading=`${name} · ${size} · ${params.material}`;
   const labels=model.parts.map(part=>`<article class="part-label"><small>千年木艺 / ${e(name)}</small><h2>${e(part.id)}　${e(part.name)}</h2><b>${e(part.size.join(' × '))} mm</b><p>${e(part.material)} · ${part.quantity} 件</p><p>${e(part.orientation)}</p><p>配合 ${e(model.joints.filter(j=>j.partIds.includes(part.id)).map(j=>j.id).join(' / '))}</p></article>`).join('');
   let body;
@@ -80,8 +91,8 @@ export function printDocument(kind,name,model,params) {
     <h2>试装检查</h2>${sampleTasks(model,params).map(task=>`<article><p>□ ${e(task)}</p><p>实测 / 处理 __________________________________________</p></article>`).join('')}
     <p>加工方意见 ____________________　复核签字 ____________________</p>`;
   } else {
-    body=`<h1>${e(name)} · 设计方案</h1><p>${e(heading)} · 板厚 ${params.t} mm</p><p>使用需求：${e(params.requirement||'未填写')}</p>${table(['构件','名称','名义尺寸 (mm)','件数','方向'],model.parts.map(p=>[p.id,p.name,p.size.join(' × '),p.quantity,p.orientation]))}<h2>连接关系</h2>${table(['接口','构件','位置','接口标记坐标 x / y / z (mm)'],model.joints.map(j=>[j.id,j.partIds.join(' / '),j.name,j.point.join(' / ')]))}<h2>教学装配顺序</h2>${model.steps.map((s,i)=>`<article><h3>${i+1}. ${e(s.title)}</h3><p>${e(s.text)}</p><p>复核：${e(s.check)}</p></article>`).join('')}<p>设计草案。样件、承载、配合公差与工艺审核均待完成。</p>`;
+    body=`<h1>${e(name)} · 设计方案</h1><p>${e(heading)}${params.t?` · 板厚 ${params.t} mm`:''}</p><p>使用需求：${e(params.requirement||'未填写')}</p>${table(['构件','名称','名义尺寸 (mm)','件数','方向'],model.parts.map(p=>[p.id,p.name,p.size.join(' × '),p.quantity,p.orientation]))}<h2>连接关系</h2>${table(['接口','构件','位置','接口标记坐标 x / y / z (mm)'],model.joints.map(j=>[j.id,j.partIds.join(' / '),j.name,j.point.join(' / ')]))}<h2>教学装配顺序</h2>${model.steps.map((s,i)=>`<article><h3>${i+1}. ${e(s.title)}</h3><p>${e(s.text)}</p><p>复核：${e(s.check)}</p></article>`).join('')}<p>设计草案。样件、承载、配合公差与工艺审核均待完成。</p>`;
   }
-  document.getElementById('printReport').innerHTML=body;
+  document.getElementById('printReport').innerHTML=(model.engineeringNote?`<p class="print-caveat">${e(model.engineeringNote)}</p>`:'')+body;
   window.print();
 }

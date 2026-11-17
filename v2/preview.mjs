@@ -2,8 +2,8 @@ import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {spawn} from 'node:child_process';
 
-const files = new Set(['index.html', 'app.js', 'model.js', 'viewer.js', 'storage.js', 'reports.js', 'style.css']);
-const contentTypes = {html: 'text/html', js: 'text/javascript', css: 'text/css'};
+const files = new Set(['index.html', 'app.js', 'model.js', 'viewer.js', 'storage.js', 'reports.js', 'style.css','dougong.js','mesh.js','assets/dougong-reference.jpg']);
+const contentTypes = {html: 'text/html', js: 'text/javascript', css: 'text/css',jpg:'image/jpeg'};
 const host = '127.0.0.1';
 const initialPort = Number(process.env.PORT ?? 4182);
 if (!Number.isInteger(initialPort) || initialPort < 0 || initialPort > 65535) {
@@ -41,7 +41,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, {
       'Content-Type': contentTypes[file.split('.').pop()] + '; charset=utf-8',
       'Cache-Control':'no-store',
-      'X-Wood-Studio':'v2'
+      'X-Wood-Studio':'v2-dougong'
     }).end(request.method === 'HEAD' ? undefined : data);
   } catch {
     response.writeHead(500).end('Could not read the preview file.');
@@ -57,7 +57,7 @@ server.on('error', async error => {
   }
   try {
     const existing = await fetch(previewUrl(initialPort), {method:'HEAD', redirect:'error', signal:AbortSignal.timeout(1200)});
-    if (existing.ok && existing.headers.get('x-wood-studio') === 'v2') {
+    if (existing.ok && existing.headers.get('x-wood-studio') === 'v2-dougong') {
       showAddress(initialPort);
       return;
     }

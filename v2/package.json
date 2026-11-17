@@ -1,11 +1,11 @@
 {
   "name": "wood-studio-v2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node preview.mjs",
-    "test": "node test/geometry.mjs"
+    "test": "node test/geometry.mjs && node test/dougong.mjs"
   },
   "engines": {"node": ">=20"}
 }

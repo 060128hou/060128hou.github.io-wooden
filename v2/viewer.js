@@ -1,4 +1,4 @@
-import { pose } from './model.js';
+import { pose } from './model.js?v=dougong-1';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const zero = [0, 0, 0];
@@ -48,6 +48,7 @@ function placeTag(anchor, size, width, height, occupied, offsets) {
 // Resolve each timber into its exposed rectangular faces once per parameter change.
 // The inner faces of adjacent solids must never cover a groove or form a visible seam.
 function surface(part) {
+  if(!part.solids.length)return part.meshFaces;
   const boxes = part.solids.map(s => ({
     low: s.pos.map((n,i) => n - s.size[i] / 2),
     high: s.pos.map((n,i) => n + s.size[i] / 2)
@@ -78,21 +79,21 @@ function surface(part) {
             const beyond = inside(point(plane+sign*epsilon,i,j));
             return !here || beyond;
           });
-          faces.push({axis,sign,vertices,borders});
+          faces.push({axis,sign,vertices,borders,normal:scale(axes[axis],sign)});
         }
       }
     }
   }
-  return faces;
+  return [...faces,...(part.meshFaces||[])];
 }
 
 // A plane can cut a long shelf face in two. Average-depth sorting alone draws it
 // over a nearer side panel at certain camera angles. Partition before painting.
-function splitFace(face, axis, position) {
+function splitFace(face, normal, position) {
   const left = [], right = [];
   for (let i = 0; i < face.vertices.length; i++) {
     const a = face.vertices[i], b = face.vertices[(i+1) % face.vertices.length];
-    const da = a[axis]-position, db = b[axis]-position;
+    const da = dot(a,normal)-position, db = dot(b,normal)-position;
     if (da <= epsilon) left.push(a);
     if (da >= -epsilon) right.push(a);
     if ((da < -epsilon && db > epsilon) || (da > epsilon && db < -epsilon)) {
@@ -107,20 +108,22 @@ function splitFace(face, axis, position) {
 function sortedFaces(faces, camera, result = []) {
   if (faces.length <= 1) { result.push(...faces); return result; }
   const pivot = faces[faces.length >> 1];
-  const axis = pivot.axis, at = pivot.vertices[0][axis];
+  const normal = pivot.normal, at = dot(pivot.vertices[0],normal);
   const less=[], more=[], same=[];
   for (const f of faces) {
-    const low = Math.min(...f.vertices.map(p => p[axis]));
-    const high = Math.max(...f.vertices.map(p => p[axis]));
+    if(f===pivot){same.push(f);continue;}
+    const distances=f.vertices.map(p=>dot(p,normal));
+    const low = Math.min(...distances);
+    const high = Math.max(...distances);
     if (low < at-epsilon && high > at+epsilon) {
-      const [a,b] = splitFace(f,axis,at); less.push(a); more.push(b);
+      const [a,b] = splitFace(f,normal,at); less.push(a); more.push(b);
     } else if (low < at-epsilon) less.push(f);
     else if (high > at+epsilon) more.push(f);
     else same.push(f);
   }
-  sortedFaces(camera[axis] >= 0 ? less : more,camera,result);
+  sortedFaces(dot(camera,normal) >= 0 ? less : more,camera,result);
   result.push(...same);
-  sortedFaces(camera[axis] >= 0 ? more : less,camera,result);
+  sortedFaces(dot(camera,normal) >= 0 ? more : less,camera,result);
   return result;
 }
 
@@ -150,6 +153,7 @@ export class Viewer {
     this.id=`wood-view-${++nextViewer}`;
     this.model=null; this.selected=null; this.mode='inspect'; this.step=0; this.progress=0;
     this.playing=false; this.explosion=0; this.yaw=-0.57; this.pitch=0.40; this.zoom=1;
+    this.showLabels=true;
     this.animation=0; this.pendingDraw=0; this.gestures=new Map();
     this.events=new AbortController();
     svg.setAttribute('role','group'); svg.setAttribute('tabindex','0');
@@ -215,7 +219,11 @@ export class Viewer {
   }
   select(id){if(this.selected!==id){this.selected=id;this.requestDraw();}}
   pick(id){this.select(id);this.onSelect(id);}
-  resetView(){this.yaw=-.57;this.pitch=.40;this.zoom=1;this.requestDraw();}
+  resetView(){
+    const camera=this.model?.camera||{yaw:-.57,pitch:.40,zoom:1};
+    this.yaw=camera.yaw;this.pitch=camera.pitch;this.zoom=camera.zoom;this.requestDraw();
+  }
+  setLabels(show){this.showLabels=show;this.requestDraw();}
   zoomBy(factor){this.zoom=clamp(this.zoom*factor,.65,2.35);this.requestDraw();}
   inspect(){this.pause();this.mode='inspect';this.progress=0;this.updateFrame();this.draw();this.notify();}
   setExplosion(fraction){this.explosion=clamp(fraction,0,1);this.inspect();}
@@ -294,7 +302,7 @@ export class Viewer {
       const state=arrangement.parts[part.id]; if(!state?.visible)continue;
       const patterns=new Map();
       for(const f of this.surfaces.get(part.id)){
-        if(f.sign*localCamera[f.axis]<epsilon)continue;
+        if(dot(f.normal,localCamera)<epsilon)continue;
         if(!patterns.has(f.axis)){
           const onFace=[0,1,2].filter(i=>i!==f.axis).sort((i,j)=>part.box[j]-part.box[i]);
           const origin=localToScreen(add(part.pos,state.offset));
@@ -304,7 +312,7 @@ export class Viewer {
           const id=`${this.id}-${part.id}-${f.axis}`; defs.append(grain(id,transform,part.box[f.axis]>part.box[onFace[0]]));patterns.set(f.axis,id);
         }
         const vertices=f.vertices.map(v=>add(v,state.offset));
-        const normal=rotateZ(scale(axes[f.axis],f.sign),arrangement.roll);
+        const normal=rotateZ(f.normal,arrangement.roll);
         faces.push({...f,part,vertices,original:vertices,fill:shade(part.material,normal),pattern:patterns.get(f.axis)});
       }
     }
@@ -320,7 +328,12 @@ export class Viewer {
         const a=f.vertices[i], b=f.vertices[(i+1)%f.vertices.length];
         const edge=f.original.findIndex((v,index)=>{
           const u=f.original[(index+1)%f.original.length];
-          return v.every((val,k)=>Math.abs(u[k]-val)>epsilon || (Math.abs(a[k]-val)<epsilon&&Math.abs(b[k]-val)<epsilon));
+          const line=add(u,scale(v,-1)),length=dot(line,line);
+          if(length<epsilon)return false;
+          return [a,b].every(point=>{
+            const delta=add(point,scale(v,-1)),t=dot(delta,line)/length;
+            return Math.hypot(...add(delta,scale(line,-t)))<epsilon&&t>=-epsilon&&t<=1+epsilon;
+          });
         });
         if(edge>=0 && f.borders[edge])group.append(node('path',{d:pathOf([vertices[i],vertices[(i+1)%vertices.length]]),fill:'none',stroke:edgeColor,'stroke-width':selected?1.8:active?1.4:.75,'stroke-opacity':selected||active?.95:.6,'pointer-events':'none'}));
       }
@@ -415,6 +428,7 @@ export class Viewer {
   drawLabels(layer,arrangement,project,w,h,occupied){
     for(const part of this.model.parts){
       const state=arrangement.parts[part.id];if(!state?.visible)continue;
+      if(!this.showLabels&&part.id!==this.selected&&!arrangement.activeIds.includes(part.id))continue;
       const anchor=project(add(part.labelPoint||part.pos,state.offset));
       const [x,y]=placeTag(anchor,[36,22],w,h,occupied,[[0,0],[0,26],[0,-26],[40,0],[-40,0],[0,52],[0,-52]]);
       const selected=part.id===this.selected, active=arrangement.activeIds.includes(part.id);
