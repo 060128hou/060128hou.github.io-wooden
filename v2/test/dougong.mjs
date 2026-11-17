@@ -44,9 +44,10 @@ for(const s of [60,75,100,140]){
     }
   }
   const exported=snapshot(p);
-  assert.ok(exported.engineering.includes('比例复原'));
+  assert.ok(exported.engineering.includes('比例展示'));
   assert.equal(exported.parameters.s,s);
 }
 assert.ok(validate({...defaults('dougong'),s:0}).length);
 assert.ok(validate({...defaults('dougong'),s:75.5}).length);
 console.log(`Dougong: four scales, 27 parts, planar meshes and ${count} sampled tutorial states passed.`);
+

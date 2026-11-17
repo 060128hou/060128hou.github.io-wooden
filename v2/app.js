@@ -1,7 +1,7 @@
-import {CASES, FIELD_NAMES, MATERIALS, defaults, validate, build, snapshot, csv} from './model.js?v=dougong-1';
-import {Viewer} from './viewer.js?v=dougong-1';
+import {CASES, FIELD_NAMES, MATERIALS, defaults, validate, build, snapshot, csv} from './model.js?v=obj-1';
+import {Viewer} from './viewer.js?v=obj-1';
 import {readDraft, saveDraft, lastCase, listApplications, createApplication} from './storage.js';
-import {escapeHtml as e, downloadFile, printDocument, partDiagram, featureNotes, sampleTasks} from './reports.js?v=dougong-1';
+import {escapeHtml as e, downloadFile, printDocument, partDiagram, featureNotes, sampleTasks} from './reports.js?v=obj-1';
 
 const el = id => document.getElementById(id);
 let params, model, selectedId;
@@ -109,16 +109,15 @@ function renderCase() {
   const spec=CASES[params.caseId];
   el('caseTitle').textContent=spec.name;
   el('caseDescription').textContent=spec.subtitle;
-  document.querySelector('.edition').textContent=spec.reference?'斗拱案例':'第二版';
+  document.querySelector('.edition').textContent=spec.engineeringNote?'斗拱案例':'第二版';
   el('caseType').textContent=spec.connection;
   el('partCount').textContent=model.parts.length;
   el('stepCount').textContent=model.steps.length;
   const {w,h,d}=model.dimensions;
-  el('viewDimensions').textContent=`${model.dimensionLabel||'外廓'}　${w} × ${h} × ${d} mm`;
-  el('caseNote').hidden=!spec.reference;
-  el('caseCaveat').textContent=spec.engineeringNote||'';
-  el('bomNote').textContent=spec.reference?'下表列出 27 个展示分件的外包尺寸，供核对比例与编号。实物分件及加工尺寸待测绘。':'按编号核对模型、教程与实物。下表为名义尺寸，单位毫米。';
-  el('stockVolume').textContent=spec.reference?'图示比例模型 · 分件与加工尺寸待复核':`开槽前名义材积 ${model.volume.toFixed(4)} m³（不含开料余量）`;
+  el('viewDimensions').textContent=`${model.dimensionLabel||'外廓'}　${w} × ${h} × ${d} ${model.unitLabel||'mm'}`;
+  el('bomDimensions').textContent=model.unitLabel?`X × Y × Z (${model.unitLabel})`:'长 × 宽 × 厚 (mm)';
+  el('bomNote').textContent=model.unitLabel?`下表列出 ${model.parts.length} 个原始网格分件，外廓使用模型单位。请先确认实物尺寸比例，再制作料包。`:spec.engineeringNote?`下表列出 ${model.parts.length} 个展示分件的外包尺寸，供核对比例与编号。实物分件及加工尺寸待测绘。`:'按编号核对模型、教程与实物。下表为名义尺寸，单位毫米。';
+  el('stockVolume').textContent=spec.engineeringNote?'展示模型 · 分件与加工尺寸待复核':`开槽前名义材积 ${model.volume.toFixed(4)} m³（不含开料余量）`;
   document.body.dataset.case=params.caseId;
   viewer.setModel(model);
   if(mode==='tutorial')viewer.setStep(stepIndex);
@@ -154,8 +153,8 @@ function selectPart(id) {
   const connections=model.joints.filter(j=>j.partIds.includes(id)).map(j=>j.id).join(' · ');
   const detail=el('partDetail');
   const drawingOpen=Boolean(detail.querySelector('details')?.open);
-  detail.innerHTML=`<strong>${e(part.id)}　${e(part.name)}</strong><p>${e(part.size.join(' × '))} mm　·　${e(part.material)}</p><p>${e(part.orientation)}　${e(part.note)}</p><small>连接位置　${e(connections)}</small>
-    <details class="part-sheet" ${drawingOpen?'open':''}><summary>查看构件${model.engineeringNote?'比例':'尺寸'}图</summary>${partDiagram(part)}${featureNotes(part)}</details>`;
+  detail.innerHTML=`<strong>${e(part.id)}　${e(part.name)}</strong><p>${e(part.size.join(' × '))} ${e(model.unitLabel||'mm')}　·　${e(part.material)}</p><p>${e(part.orientation)}　${e(part.note)}</p><small>${connections?'连接位置　'+e(connections):'按编号核对空间落位'}</small>
+    <details class="part-sheet" ${drawingOpen?'open':''}><summary>查看构件${model.unitLabel?'外廓':model.engineeringNote?'比例':'尺寸'}图</summary>${partDiagram(part)}${featureNotes(part)}</details>`;
   el('bomBody').innerHTML=model.parts.map(p=>`<tr class="${p.id===id?'selected':''}"><td><button type="button" class="part-link" data-part="${e(p.id)}" aria-pressed="${p.id===id}">${e(p.id)}</button></td><td>${e(p.name)}</td><td>${p.quantity}</td><td>${e(p.size.join(' × '))}</td><td>${e(p.note)}</td></tr>`).join('');
 }
 
@@ -227,7 +226,7 @@ function usePreset(id) {
 }
 
 function makePlan() {
-  return {...snapshot(params),sampleChecklist:sampleTasks(model,params),verificationStatus:{geometry:model.engineeringNote?'图示比例复原，暗榫与实体路径待核对':'名义几何已检查',physicalSample:'待试制',craftReview:'待人工复核'}};
+  return {...snapshot(params),sampleChecklist:sampleTasks(model,params),verificationStatus:{geometry:model.gpu?'原始网格分件，落位与比例联动已检查':model.engineeringNote?'图示比例复原，暗榫与实体路径待核对':'名义几何已检查',physicalSample:'待试制',craftReview:'待人工复核'}};
 }
 
 function renderApplications() {
@@ -236,7 +235,7 @@ function renderApplications() {
     el('requestList').innerHTML=records.length?records.map(record=>{
       const p=record.plan.parameters;
       const size=record.plan.dimensions||p;
-      return `<article class="request-record"><div><strong>${e(CASES[p.caseId||'shelf']?.name||'木作方案')} · ${e(record.status)}</strong><p>${e(size.w)} × ${e(size.h)} × ${e(size.d)} mm　${e(new Date(record.createdAt).toLocaleString('zh-CN'))}</p>${record.note?`<p>${e(record.note)}</p>`:''}</div><button type="button" data-record="${e(record.id)}">导出申请</button></article>`;
+      return `<article class="request-record"><div><strong>${e(CASES[p.caseId||'shelf']?.name||'木作方案')} · ${e(record.status)}</strong><p>${e(size.w)} × ${e(size.h)} × ${e(size.d)} ${e(record.plan.unitLabel||'mm')}　${e(new Date(record.createdAt).toLocaleString('zh-CN'))}</p>${record.note?`<p>${e(record.note)}</p>`:''}</div><button type="button" data-record="${e(record.id)}">导出申请</button></article>`;
     }).join(''):'<p>此浏览器暂无申请记录。</p>';
   } catch {el('requestList').textContent='申请记录读取失败。请保留现有浏览器数据。';}
 }
@@ -265,14 +264,6 @@ el('playAll').onclick=()=>{
   else {showCurrentMotion();viewer.play();}
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopContinuous();});
-el('openReference').onclick=()=>{
-  const ref=CASES[params.caseId].reference;if(!ref)return;
-  stopContinuous();viewer.pause();
-  el('referenceImage').src=ref.url;el('referenceTitle').textContent=ref.title;
-  el('referenceCredit').textContent=ref.credit;el('referenceDialog').showModal();
-};
-el('closeReference').onclick=()=>el('referenceDialog').close();
-el('referenceDialog').onclick=event=>{if(event.target===el('referenceDialog'))el('referenceDialog').close();};
 for(const id of ['stepParts','bomBody'])el(id).onclick=event=>{const button=event.target.closest('[data-part]');if(button)selectPart(button.dataset.part);};
 el('exportJson').onclick=()=>{if(commitForm())downloadFile(`${CASES[params.caseId].name}-方案.json`,JSON.stringify(makePlan(),null,2));};
 el('exportCsv').onclick=()=>{if(commitForm())downloadFile(`${CASES[params.caseId].name}-构件清单.csv`,csv(params),'text/csv;charset=utf-8');};

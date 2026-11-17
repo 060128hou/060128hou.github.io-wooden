@@ -1,4 +1,5 @@
-import { pose } from './model.js?v=dougong-1';
+import { pose } from './model.js?v=obj-1';
+import {MeshRenderer} from './gpu.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const zero = [0, 0, 0];
@@ -189,7 +190,7 @@ export class Viewer {
     });
     this.on(svg,'pointerup',e=>{
       const p=this.gestures.get(e.pointerId);this.gestures.delete(e.pointerId);
-      if(p&&!p.drag){const id=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-id]')?.dataset.id;if(id)this.pick(id);}
+      if(p&&!p.drag){const id=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-id]')?.dataset.id || (this.model?.gpu&&this.gpu?.pick(e.clientX,e.clientY));if(id)this.pick(id);}
     });
     this.on(svg,'lostpointercapture',e=>this.gestures.delete(e.pointerId));
     this.on(svg,'pointercancel',e=>this.gestures.delete(e.pointerId));
@@ -213,6 +214,8 @@ export class Viewer {
   }
   setModel(model){
     this.pause(); this.model=model; this.mode='inspect'; this.step=0; this.progress=0;
+    if(model.gpu&&!this.gpu)this.gpu=new MeshRenderer(this.svg,()=>this.requestDraw(),()=>this.pause());
+    this.gpu?.setModel(model);
     this.surfaces=new Map(model.parts.map(part=>[part.id,surface(part)]));
     if(!model.parts.some(p=>p.id===this.selected))this.selected=null;
     this.updateFrame(); this.draw(); this.notify();
@@ -282,7 +285,15 @@ export class Viewer {
     const xMin=Math.min(...xs),xMax=Math.max(...xs),yMin=Math.min(...ys),yMax=Math.max(...ys);
     const s=this.zoom*Math.min((w-70)/Math.max(1,xMax-xMin),(h-87)/Math.max(1,yMax-yMin));
     const x0=w/2-s*(xMin+xMax)/2,y0=h/2+s*(yMin+yMax)/2+4;
-    return {camera,s,project:p=>[x0+s*dot(p,horiz),y0-s*dot(p,vert)]};
+    const zs=this.frame.map(v=>dot(v,camera)),low=Math.min(...zs)-100,high=Math.max(...zs)+100;
+    const kx=2*s/w,ky=2*s/h,kz=2/(high-low);
+    const matrix=new Float32Array([
+      horiz[0]*kx,vert[0]*ky,-camera[0]*kz,0,
+      horiz[1]*kx,vert[1]*ky,-camera[1]*kz,0,
+      horiz[2]*kx,vert[2]*ky,-camera[2]*kz,0,
+      2*x0/w-1,1-2*y0/h,(high+low)/(high-low),1
+    ]);
+    return {camera,s,matrix,project:p=>[x0+s*dot(p,horiz),y0-s*dot(p,vert)]};
   }
   requestDraw(){
     if(!this.pendingDraw)this.pendingDraw=requestAnimationFrame(()=>{this.pendingDraw=0;this.draw();});
@@ -292,11 +303,12 @@ export class Viewer {
     const bounds=this.svg.getBoundingClientRect(),w=bounds.width,h=bounds.height;
     if(w<90||h<90)return;
     this.svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
-    const {camera,s,project}=this.projector(w,h), arrangement=this.arrangement(this.progress);
+    const {camera,s,project,matrix}=this.projector(w,h), arrangement=this.arrangement(this.progress);
     const localCamera=rotateZ(camera,-arrangement.roll);
     const localToScreen=p=>project(world(p,arrangement));
     const defs=node('defs'), result=document.createDocumentFragment();result.append(defs);
-    this.drawGround(result,defs,w,h,s,project);
+    if(this.model.gpu)this.gpu.draw(this.model,arrangement,matrix,w,h,this.selected);
+    else this.drawGround(result,defs,w,h,s,project);
     const faces=[];
     for(const part of this.model.parts){
       const state=arrangement.parts[part.id]; if(!state?.visible)continue;
@@ -439,5 +451,5 @@ export class Viewer {
       label.textContent=part.id;g.append(label);layer.append(g);
     }
   }
-  destroy(){this.pause();cancelAnimationFrame(this.pendingDraw);this.observer.disconnect();this.events.abort();}
+  destroy(){this.pause();cancelAnimationFrame(this.pendingDraw);this.observer.disconnect();this.events.abort();this.gpu?.destroy();}
 }

@@ -1,6 +1,6 @@
 import {extrude,taperedBlock,roundBeam} from './mesh.js';
 
-export const DOUGONG_NOTE='依据用户提供的拼装说明图作比例复原。尺寸为展示设定，隐藏榫口、分件和局部前后关系待实物核对。';
+export const DOUGONG_NOTE='当前为比例展示尺寸。隐藏榫口、分件和局部前后关系待实物核对。';
 const round=n=>Math.round(n*10)/10;
 const groups=[
   {title:'第一图 · 底座、华栱与昂',ids:['D01','G01','G02','D02','D03','D04','A01','D05']},
@@ -21,10 +21,7 @@ export const dougongCase = {
     {label:'数据范围',detail:'当前校验覆盖展示数据及动画落位。实物公差、暗榫与尺寸待核对。',ok:true}
   ],
   geometry:dougongGeometry,tableLift:()=>0,pose:dougongPose,
-  camera:{yaw:.66,pitch:.38,zoom:1.05},
-  reference:{url:new URL('./assets/dougong-reference.jpg',import.meta.url).href,
-    title:'宋式斗栱四铺作重栱出单抄插昂柱头铺作拼装说明书',
-    credit:'用户提供的原始说明图，图示署名为天津嘉信诚品科技有限公司。'}
+  camera:{yaw:.66,pitch:.38,zoom:1.05}
 };
 
 function bracketProfile(length,bottom,top,{topNotch,bottomNotch}={}) {
@@ -161,7 +158,7 @@ function dougongGeometry(p) {
     ['撩檐枋与衬枋头',['F04','F05'],'檐外横向放撩檐枋，再沿前后方向放衬枋头。动画展示轴测图推定的相对位置。','中央缺口和承托关系需结合料包复核。'],
     ['放置替木',['T01'],'将替木横向放在衬枋头上方，为顶部圆木提供承托。','图中的定位销和销孔需在实体上确认。'],
     ['落下牛脊槫',['P01'],'让圆木轴线与替木的长边一致，平缓放到顶部承托位置。','核对轴线、滚动约束与实际连接。'],
-    ['整体核对',[],'旋转模型对照原说明图，检查栌斗、栱架、昂、枋材和槫木的上下关系。点选任一构件可查看编号与档案。','展示分件与动作已适配。尺寸、暗榫及实际插入路径待实物验证。']
+    ['整体核对',[],'旋转模型检查栌斗、栱架、昂、枋材和槫木的上下关系。点选任一构件可查看编号与档案。','展示分件与动作已适配。尺寸、暗榫及实际插入路径待实物验证。']
   ];
   const steps=specs.map(([title,ids,text,check],i)=>({
     id:'dougong-'+(i+1),title,ids:ids.length?ids:parts.map(v=>v.id),movingIds:ids,

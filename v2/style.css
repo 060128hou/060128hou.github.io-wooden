@@ -88,23 +88,13 @@ nav a:hover { color: var(--amber-light); }
 .case-facts span:first-child { font-weight: 600; color: var(--amber); }
 h1 { font: 600 clamp(29px, 2.5vw, 42px)/1.23 var(--serif); letter-spacing: .045em; color: #f3ecdf; }
 .overview-text > p { color: var(--muted); margin-top: 8px; font-size: 13px; }
-.case-note:not([hidden]) { display: flex; gap: 20px; align-items: center; justify-content: space-between; padding: 12px 16px; margin: -4px 0 18px; border-left: 2px solid #b98c51; background: #26221f; }
-.case-note p { max-width: 850px; color: #c0b6a7; font-size: 12px; }
-.case-note button { white-space: nowrap; color: var(--amber-light); background: transparent; border-color: #6a553c; }
-dialog { color: var(--ink); background: var(--surface); border: 1px solid var(--edge-warm); border-radius: 10px; width: min(880px,94vw); max-height: 90vh; padding: 20px; }
-dialog::backdrop { background: #080707c9; }
-.reference-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
-.reference-heading h2 { font-size: 16px; max-width: 620px; }
-.reference-heading button { white-space: nowrap; }
-#referenceCredit { color: var(--muted); font-size: 12px; margin: 8px 0 16px; }
-#referenceImage { display: block; width: 100%; height: auto; }
 .step-group { grid-column: 1 / -1; flex-basis: 100%; color: #d5ba90; font-size: 11px; margin: 8px 0 4px; }
 .continuous-play { width: 100%; margin-bottom: 12px; color: var(--amber-light); border-color: #685135; background: #342b22; }
 .continuous-play[aria-pressed="true"] { color: #fff1ce; background: #645030; }
 #toggleLabels[aria-pressed="true"] { color: var(--amber-light); text-decoration: underline; text-underline-offset: 4px; }
-body[data-case="dougong"] #stepList { max-height: 270px; overflow-y: auto; padding-right: 5px; scrollbar-color: #66553e #222124; scrollbar-width: thin; }
-body[data-case="dougong"] .param-fields { grid-template-columns: 1fr; }
-body[data-case="dougong"] .stage { min-height: 440px; }
+body:is([data-case="dougong"],[data-case="chinese"]) #stepList { max-height: 270px; overflow-y: auto; padding-right: 5px; scrollbar-color: #66553e #222124; scrollbar-width: thin; }
+body:is([data-case="dougong"],[data-case="chinese"]) .param-fields { grid-template-columns: 1fr; }
+body:is([data-case="dougong"],[data-case="chinese"]) .stage { min-height: 440px; }
 .case-switch { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .case-switch label { font-size: 11px; color: var(--muted); }
 .case-switch select { width: auto; min-width: 170px; color: #e9d8c1; border-color: #584c3d; background: #252322; }
@@ -243,10 +233,8 @@ footer { display: flex; justify-content: space-between; gap: 15px; padding: 26px
   .case-switch { flex-direction: column; gap: 4px; align-items: start; }
 }
 @media (max-width: 620px) {
-  .case-note:not([hidden]) { display: block; padding: 10px 12px; margin-bottom: 12px; }
-  .case-note button { margin-top: 8px; min-height: 30px; font-size: 11px; }
-  body[data-case="dougong"] .stage { min-height: 320px; }
-  body[data-case="dougong"] #stepList { max-height: 260px; }
+  body:is([data-case="dougong"],[data-case="chinese"]) .stage { min-height: 320px; }
+  body:is([data-case="dougong"],[data-case="chinese"]) #stepList { max-height: 260px; }
   html { scroll-padding-top: 10px; }
   .header-inner, main { width: 92%; }
   .header-inner { min-height: 0; padding-top: 13px; justify-content: space-between; flex-wrap: wrap; gap: 5px; }
@@ -315,3 +303,10 @@ footer { display: flex; justify-content: space-between; gap: 15px; padding: 26px
   #printReport .part-drawing { height: 35mm; margin: 1mm 0; }
   #printReport ul, #printReport ol { padding-left: 20pt; }
 }
+.mesh-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mesh-status{position:absolute;inset:35% 8% auto;z-index:3;padding:20px;background:#26221d;color:#eac48a;border:1px solid #655239;border-radius:8px;text-align:center}
+.mesh-status button{display:block;margin:12px auto 0}
+.mesh-canvas[hidden],.mesh-status[hidden]{display:none}
+#viewer{z-index:1}
+.scene-caption{z-index:2;pointer-events:none}
+

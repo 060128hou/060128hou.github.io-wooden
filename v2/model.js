@@ -1,4 +1,5 @@
 import {dougongCase} from './dougong.js';
+import {chineseCase} from './chinese.js';
 
 // Geometry is expressed in mm: X across, Y up, Z towards the front.
 // All coordinates, slots, joint markers and motion endpoints originate here.
@@ -7,6 +8,7 @@ export const FIELD_NAMES = {
 };
 
 export const CASES = {
+  chinese:chineseCase,
   dougong:dougongCase,
   shelf: {
     id: 'shelf', name: '案上双层置物架', subtitle: '四件木构件的嵌槽装配',
@@ -213,7 +215,7 @@ export function build(p) {
   const def = CASES[p.caseId];
   const geometry = def.geometry(p);
   const parts = geometry.parts.map(part => ({...part, material: p.material, quantity: 1, jointIds: geometry.joints.filter(j => j.partIds.includes(part.id)).map(j => j.id)}));
-  const volume = parts.reduce((v, part) => v + part.size.reduce((a, b) => a * b, 1), 0) / 1e9;
+  const volume = geometry.unitLabel ? null : parts.reduce((v, part) => v + part.size.reduce((a, b) => a * b, 1), 0) / 1e9;
   return {dimensions:{w:p.w,h:p.h,d:p.d},...geometry, caseId: p.caseId, name: def.name, parameters: {...p}, connection: def.connection, camera:def.camera, parts, checks: def.checkRelations(p), volume};
 }
 
@@ -258,12 +260,13 @@ export function pose(model, stepIndex, progress) {
 export function snapshot(p) {
   const model = build(p);
   return {schemaVersion: 2, case: model.name, createdAt: new Date().toISOString(),
-    status: model.engineeringNote?'图示比例复原 / 待实物核对':'名义设计 / 样件及工艺待验证', ...model, engineering: model.engineeringNote||ENGINEERING_NOTE};
+    status: model.gpu?'原始网格展示 / 待实物核对':model.engineeringNote?'图示比例复原 / 待实物核对':'名义设计 / 样件及工艺待验证', ...model, engineering: model.engineeringNote||ENGINEERING_NOTE};
 }
 
 export function csv(p) {
-  const {parts} = build(p);
-  const rows = [['案例', '编号', '构件', '材料', '数量', '长(mm)', '宽(mm)', '厚(mm)', '接口编号', '方向', '设计备注'],
+  const {parts,unitLabel='mm'} = build(p);
+  const dimensions=unitLabel==='mm'?['长(mm)','宽(mm)','厚(mm)']:[`X(${unitLabel})`,`Y(${unitLabel})`,`Z(${unitLabel})`];
+  const rows = [['案例', '编号', '构件', '材料', '数量', ...dimensions, '接口编号', '方向', '设计备注'],
     ...parts.map(part => [CASES[p.caseId].name, part.id, part.name, part.material, part.quantity, ...part.size, part.jointIds.join(' / '), part.orientation, part.note]),
     ['待工程验证', '', '', '', '', '', '', '', '', '', CASES[p.caseId].engineeringNote||ENGINEERING_NOTE]];
   return '\uFEFF' + rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\r\n');
