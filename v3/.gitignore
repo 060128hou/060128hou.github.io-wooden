@@ -44,3 +44,6 @@ yarn-error.log*
 
 # OS metadata
 .DS_Store
+
+# Intermediate model geometry
+/.teaching-build/

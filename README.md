@@ -1,10 +1,14 @@
 # 千年木艺 · 桌面营造工坊 V3
 
-[打开正式网站](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/) · [自由搭建](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/?view=studio) · [客服工作台](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/?view=staff)
+[打开正式网站](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/) · [斗拱三维模型馆](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/?view=teaching) · [自由搭建](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/?view=studio) · [客服工作台](https://qian-nian-wood-workshop.easyjay70.chatgpt.site/?view=staff)
 
 原 GitHub Pages 网址继续可用，会自动进入新版网站。原版模型与教程保留在 [v2](https://060128hou.github.io/060128hou.github.io-wooden/v2/?case=chinese)。
 
 ## 本次更新
+
+- 新增 19 款斗拱三维展示模型：四至八铺柱头与补间、上昂、转角、明清和古建节点；用户端只展示模型，不提供 PDF 或图纸入口。
+- 1,177 件展示构件、436 个编排步骤；支持爆炸图、点选构件、装配播放、预览导出、保存分享和提交客服。展示分件数量与比例单位不能直接用于加工。
+- 随附可编辑模型生成器，可运行 `npm run models:build` 重建网格与步骤数据。
 
 - 首页两组完整木构建筑模型，支持旋转、分层查看与展开；斗拱教程保留。
 - 7 种桌面模块自由搭建：选择、移动、吸附、尺寸、旋转、复制、删除、撤销重做。

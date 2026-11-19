@@ -1,10 +1,13 @@
+import teachingCatalogData from './teaching.catalog.json' with {type:'json'};
+const teachingIds=new Set(teachingCatalogData.map(m=>'teaching-'+m.id));
+const teachingStepCounts=new Map(teachingCatalogData.map(m=>['teaching-'+m.id,m.stepCount]));
 export type V3=[number,number,number];
 export type Kind='base'|'column'|'beam'|'panel'|'board'|'bracket'|'roof';
 export type Face='front'|'back'|'left'|'right'|'top';
 export type Ornament={id:string;pattern:string;face:Face;size:number;rotation:number;u:number;v:number};
 export type Piece={id:string;kind:Kind;name:string;position:V3;size:V3;rotation:number;patterns:Ornament[]};
 export const partCode=(p:Piece)=>'M-'+p.id.replaceAll('-','').slice(0,6).toUpperCase();
-export type Design={version:3;title:string;material:'oak'|'walnut'|'cedar';pieces:Piece[];notes:string;catalog?:string};
+export type Design={version:3;title:string;material:'oak'|'walnut'|'cedar';pieces:Piece[];notes:string;catalog?:string;catalogState?:{scale:number;step:number}};
 export type Pattern={id:string;name:string;category:string;url:string;thumbnail:string;width:number;height:number;depth:number};
 export type CatalogModel={id:string;title:string;subtitle:string;type:string;compressedUrl:string;size:V3;triangleCount:number;groups:{id:string;name:string;node:string}[]};
 export const MODULES:Record<Kind,{name:string;size:V3;description:string;mark:string}>={
@@ -80,9 +83,10 @@ export function snapPiece(p:Piece,pieces:Piece[]):Piece{
 }
 export function designSize(d:Design):V3{if(!d.pieces.length)return[0,0,0];return [0,1,2].map(k=>Math.round(Math.max(...d.pieces.map(p=>bounds(p).max[k]))-Math.min(...d.pieces.map(p=>bounds(p).min[k]))))as V3;}
 export function validateDesign(value:unknown):Design{
- const d=value as Design;if(d?.catalog&&!['timber-hall','timber-pavilion','corner-bracket','layered-bracket','legacy-chinese','legacy-dougong','legacy-shelf','legacy-divider'].includes(d.catalog))throw new Error('模型标识无效');if(!d||d.version!==3||typeof d.title!=='string'||d.title.length>100||!['oak','walnut','cedar'].includes(d.material)||!Array.isArray(d.pieces)||d.pieces.length>80||typeof d.notes!=='string'||d.notes.length>3000)throw new Error('方案格式不正确或超出限制');
+ const d=value as Design;if(d?.catalog&&!['timber-hall','timber-pavilion','corner-bracket','layered-bracket','legacy-chinese','legacy-dougong','legacy-shelf','legacy-divider'].includes(d.catalog)&&!teachingIds.has(d.catalog))throw new Error('模型标识无效');if(!d||d.version!==3||typeof d.title!=='string'||d.title.length>100||!['oak','walnut','cedar'].includes(d.material)||!Array.isArray(d.pieces)||d.pieces.length>80||typeof d.notes!=='string'||d.notes.length>3000)throw new Error('方案格式不正确或超出限制');
+ if(d.catalogState&&(!teachingIds.has(d.catalog||'')||!Number.isFinite(d.catalogState.scale)||d.catalogState.scale<.6||d.catalogState.scale>1.4||!Number.isInteger(d.catalogState.step)||d.catalogState.step< -1||d.catalogState.step>=(teachingStepCounts.get(d.catalog||'')||0)))throw new Error('模型预览参数无效');
  const ids=new Set();for(const p of d.pieces){if(!p||typeof p.id!=='string'||p.id.length>80||ids.has(p.id)||!Object.hasOwn(MODULES,p.kind)||typeof p.name!=='string'||p.name.length>80||!Array.isArray(p.size)||p.size.length!==3||p.size.some(n=>typeof n!=='number'||!Number.isFinite(n)||n<6||n>800)||!Array.isArray(p.position)||p.position.length!==3||p.position.some(n=>typeof n!=='number'||!Number.isFinite(n)||Math.abs(n)>1500)||!Number.isFinite(p.rotation)||p.rotation%90!==0||!Array.isArray(p.patterns)||p.patterns.length>8)throw new Error('构件参数无效');ids.add(p.id);
  for(const o of p.patterns)if(!o||typeof o.id!=='string'||!/^(pattern)-(0[1-9]|1[0-8])$/.test(o.pattern)||!Object.hasOwn(FACE_NAMES,o.face)||![o.size,o.rotation,o.u,o.v].every(Number.isFinite)||o.size<5||o.size>500||Math.abs(o.u)>400||Math.abs(o.v)>400)throw new Error('纹饰参数无效');}
- return {version:3,title:d.title,material:d.material,pieces:clone(d.pieces),notes:d.notes,...(typeof d.catalog==='string'&&d.catalog.length<100?{catalog:d.catalog}:{})};
+ return {version:3,title:d.title,material:d.material,pieces:clone(d.pieces),notes:d.notes,...(typeof d.catalog==='string'&&d.catalog.length<100?{catalog:d.catalog}:{}),...(d.catalogState?{catalogState:{scale:d.catalogState.scale,step:d.catalogState.step}}:{})};
 }
 export function csv(d:Design){const esc=(s:unknown)=>'"'+String(s).replace(/^[=+@\-]/,"'").replaceAll('"','""')+'"';return '\uFEFF'+[['编号','构件','长(mm)','高(mm)','深(mm)','X','Y','Z','朝向','纹饰'],...d.pieces.map((p,i)=>[partCode(p),p.name,...p.size,...p.position,p.rotation,p.patterns.map(o=>o.pattern+' / '+FACE_NAMES[o.face]).join(';')])].map(row=>row.map(esc).join(',')).join('\r\n');}

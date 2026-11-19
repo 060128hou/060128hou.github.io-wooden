@@ -5,6 +5,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {Assembly,Design,Piece,Pattern,V3,MATERIALS,bounds,snapPiece} from '@/lib/workshop';
+import type {TeachingModel} from '@/lib/teaching';
 
 const assets=new Map<string,Promise<T.Group>>();
 export async function loadModel(url:string):Promise<T.Group>{
@@ -13,14 +14,14 @@ export async function loadModel(url:string):Promise<T.Group>{
 }
 function grain(){const c=document.createElement('canvas');c.width=128;c.height=512;const cx=c.getContext('2d')!,data=cx.createImageData(128,512);for(let y=0;y<512;y++)for(let x=0;x<128;x++){const v=222+Math.sin(x*.52+Math.sin(y*.013)*1.5)*9+Math.sin(x*1.8+y*.002)*5;const i=(y*128+x)*4;data.data[i]=v;data.data[i+1]=v;data.data[i+2]=v;data.data[i+3]=255;}cx.putImageData(data,0,0);const tex=new T.CanvasTexture(c);tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.repeat.set(1,2);tex.colorSpace=T.SRGBColorSpace;return tex;}
 export type SceneHandle={capture:()=>string;reset:()=>void;rendered:()=>boolean};
-type Props={url?:string;design?:Design;patterns?:Pattern[];selected?:string|null;onSelect?:(id:string|null)=>void;onMove?:(piece:Piece)=>void;mode?:'view'|'move';assembly?:Assembly|null;step?:number;progress?:number;explode?:number;hiddenLayers?:string[];onLayers?:(names:string[])=>void;onLayerSelect?:(name:string)=>void;autoRotate?:boolean;patternView?:boolean};
+type Props={url?:string;design?:Design;teaching?:TeachingModel;lessonStep?:number;displayScale?:number;material?:keyof typeof MATERIALS;patterns?:Pattern[];selected?:string|null;onSelect?:(id:string|null)=>void;onMove?:(piece:Piece)=>void;mode?:'view'|'move';assembly?:Assembly|null;step?:number;progress?:number;explode?:number;hiddenLayers?:string[];onLayers?:(names:string[])=>void;onLayerSelect?:(name:string)=>void;autoRotate?:boolean;patternView?:boolean};
 export const Scene=forwardRef<SceneHandle,Props>(function Scene(props,ref){
  const host=useRef<HTMLDivElement>(null),engine=useRef<Engine|null>(null),latest=useRef(props);latest.current=props;
  const [status,setStatus]=useState(props.url?'正在展开木构…':''),[failed,setFailed]=useState(false),[attempt,setAttempt]=useState(0);
  useImperativeHandle(ref,()=>({capture:()=>engine.current?.capture()||'',reset:()=>engine.current?.fit(),rendered:()=>!!engine.current?.ready}));
  useEffect(()=>{let e:Engine;try{e=new Engine(host.current!,()=>latest.current,setStatus,setFailed);engine.current=e;}catch{setFailed(true);setStatus('当前浏览器无法启用三维显示，请使用支持 WebGL 的浏览器。');return;}return()=>{e.destroy();engine.current=null;};},[attempt]);
- useEffect(()=>{engine.current?.setContent(props);},[props.url,props.design,props.patterns,attempt]);
- useEffect(()=>{engine.current?.updateView(props);},[props.selected,props.mode,props.assembly,props.step,props.progress,props.explode,props.hiddenLayers]);
+ useEffect(()=>{engine.current?.setContent(props);},[props.url,props.design,props.teaching,props.patterns,attempt]);
+ useEffect(()=>{engine.current?.updateView(props);},[props.selected,props.mode,props.assembly,props.step,props.lessonStep,props.progress,props.explode,props.hiddenLayers,props.material,props.displayScale]);
  return <div className="scene" ref={host} aria-label={props.design?'可旋转、选择与移动的三维搭建空间':'可旋转查看的三维模型'}>{status&&<div className={'scene-status '+(failed?'failed':'')}><span className="loading-ring"/>{status}{failed&&<button onClick={()=>{setFailed(false);setAttempt(n=>n+1);}}>重新加载</button>}</div>}<span className="scene-axis">Y ↑ <span>X ↗</span> Z ↘</span></div>;
 });
 class Engine{
@@ -39,6 +40,16 @@ class Engine{
  down=(e:PointerEvent)=>{this.lastDown={x:e.clientX,y:e.clientY};};
  up=(e:PointerEvent)=>{if(this.dragging||Math.hypot(e.clientX-this.lastDown.x,e.clientY-this.lastDown.y)>5||this.transform.axis)return;const rect=this.renderer.domElement.getBoundingClientRect(),ray=new T.Raycaster();ray.setFromCamera(new T.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),this.camera);const hit=ray.intersectObjects(this.root.children,true).find(h=>{let o:T.Object3D|null=h.object;while(o&&o!==this.root){if(!o.visible)return false;o=o.parent;}return true;});if(hit){let o:T.Object3D|null=hit.object;while(o&&!o.userData.pieceId&&o.parent!==this.root)o=o.parent;if(o?.userData.pieceId)this.getProps().onSelect?.(o.userData.pieceId);else this.getProps().onLayerSelect?.(hit.object.name);}else this.getProps().onSelect?.(null);};
  async setContent(props:Props){const token=++this.generation;this.ready=false;this.transform.detach();for(const g of this.pieces.values())g.traverse(o=>{if(o instanceof T.Mesh&&o.userData.ownedGeometry)o.geometry.dispose();});this.pieces.clear();this.root.clear();this.architecture=null;this.grid.visible=!!props.design;this.setFailed(false);
+  this.root.scale.setScalar(1);
+  if(props.teaching){
+   this.setStatus('');this.floor.visible=true;this.grid.visible=false;
+   for(const p of props.teaching.parts){
+    const group=new T.Group(),geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p.positions,3));geometry.computeVertexNormals();
+    const uv=[];for(let i=0;i<p.positions.length;i+=3)uv.push((p.positions[i]+p.positions[i+2])*.018,p.positions[i+1]*.014);geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+    const mesh=new T.Mesh(geometry,this.material);mesh.userData.ownedGeometry=true;mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);group.userData.pieceId=p.id;group.position.fromArray(p.position);this.pieces.set(p.id,group);this.root.add(group);
+   }
+   this.root.scale.setScalar(props.displayScale||1);this.ready=true;this.fit();this.updateView(props);return;
+  }
   if(props.url){this.setStatus('正在展开木构…');try{const model=await loadModel(props.url);if(this.destroyed||token!==this.generation)return;model.traverse(o=>{if(o instanceof T.Mesh){o.material=this.material;o.castShadow=true;o.receiveShadow=true;}});this.architecture=model;this.root.add(model);this.material.color.set(props.patternView?'#d2a978':'#c8a16c');if(props.patternView){this.grid.visible=false;this.floor.visible=false;}this.setStatus('');this.ready=true;this.fit();this.updateView(props);props.onLayers?.(model.children.map(x=>x.name));}catch(e){if(token===this.generation){this.setStatus((e as Error).message);this.setFailed(true);}}return;}
   this.setStatus('');this.material.color.set(MATERIALS[props.design?.material||'oak'].color);this.selectedMaterial.color.copy(this.material.color);this.floor.visible=true;
   for(const p of props.design?.pieces||[]){const group=new T.Group();group.position.fromArray(p.position);group.rotation.y=T.MathUtils.degToRad(p.rotation);group.userData.pieceId=p.id;this.pieces.set(p.id,group);this.root.add(group);
@@ -52,6 +63,21 @@ class Engine{
  }
  hasFitted=false;
  updateView(p:Props){this.arrow.visible=false;this.connectorMarkers.forEach(m=>m.visible=false);
+  if(p.teaching){
+   const m=p.teaching,step=p.lessonStep??-1,scale=p.displayScale||1,t=Math.max(0,Math.min(1,p.progress??1)),ease=t*t*(3-2*t);
+   this.root.scale.setScalar(scale);this.material.color.set(MATERIALS[p.material||'oak'].color);this.selectedMaterial.color.copy(this.material.color);
+   for(const part of m.parts){const g=this.pieces.get(part.id);if(!g)continue;g.visible=step<0||part.installStep<=step;g.position.fromArray(part.position);
+    if(step>=0&&part.installStep===step)g.position.add(new T.Vector3(...part.travel).multiplyScalar(1-ease));
+    else if(step<0&&p.explode){const e=p.explode;g.position.x+=part.position[0]*e*.35;g.position.z+=part.position[2]*e*.4;g.position.y+=part.installStep*e*Math.max(6,m.size[1]/m.steps.length*.65);}
+    const highlight=p.selected?part.id===p.selected:step>=0&&part.installStep===step;g.traverse(o=>{if(o instanceof T.Mesh)o.material=highlight?this.selectedMaterial:this.material;});
+   }
+   if(step>=0&&m.steps[step]){
+    const moving=m.parts.filter(part=>part.installStep===step),first=moving[0];
+    if(first&&t<1){const direction=new T.Vector3(...first.travel).normalize().negate();this.arrow.setDirection(direction);this.arrow.setLength(Math.min(55,Math.max(...m.size)*.16),10,5);this.arrow.position.set((first.position[0]+first.size[0]/2+14)*scale,(first.position[1]+first.travel[1]*(1-ease))*scale,first.position[2]*scale);this.arrow.visible=true;}
+    moving.slice(0,8).forEach((part,i)=>{const dot=this.connectorMarkers[i];dot.position.set(part.position[0]*scale,(part.position[1]-part.size[1]/2)*scale,part.position[2]*scale);dot.visible=t<1;});
+   }
+   this.transform.detach();return;
+  }
   if(this.architecture){this.architecture.children.forEach((o,i)=>{o.visible=!p.hiddenLayers?.includes(o.name);o.position.y=(p.explode||0)*i*60;});return;}
   for(const [id,g]of this.pieces){const piece=p.design?.pieces.find(x=>x.id===id);if(!piece)continue;g.position.fromArray(piece.position);g.visible=true;g.traverse(o=>{if(o instanceof T.Mesh&&!o.parent?.userData.ornament&&o.material===this.material||o instanceof T.Mesh&&o.material===this.selectedMaterial)(o as T.Mesh).material=id===p.selected?this.selectedMaterial:this.material;});
    if(p.assembly?.valid&&p.step!==undefined&&p.step>=0){const index=p.assembly.steps.findIndex(x=>x.pieceId===id);if(index>p.step)g.visible=false;if(index===p.step){const s=p.assembly.steps[index],t=Math.max(0,Math.min(1,p.progress||0)),ease=t*t*(3-2*t);g.position.lerpVectors(new T.Vector3(...s.from),new T.Vector3(...s.to),ease);}}
